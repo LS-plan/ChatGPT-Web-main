@@ -17,7 +17,7 @@ import yaml
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
 
-with open("D:\Documents\Study\软件杯\AI对话\ChatGPT-Web-main\ChatGPT-Web-main\config.yaml", "r", encoding="utf-8") as f:
+with open("F:\ChatGPT-Web-main\config.yaml", "r", encoding="utf-8") as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
     if 'HTTPS_PROXY' in config:
         if os.environ.get('HTTPS_PROXY') is None:  # 优先使用环境变量中的代理，若环境变量中没有代理，则使用配置文件中的代理
@@ -57,7 +57,7 @@ project_info = "## ChatGPT 网页版    \n" \
 
 
 def get_response_from_ChatGPT_API(message_context, apikey,
-                                  model="gpt-3.5-turbo", temperature=0.9, presence_penalty=0, max_tokens=2000):
+                                  model="gpt-3.5-turbo-16k", temperature=0.9, presence_penalty=0, max_tokens=2000):
     """
     从ChatGPT API获取回复
     :param message_context: 上下文
@@ -72,6 +72,7 @@ def get_response_from_ChatGPT_API(message_context, apikey,
         apikey = API_KEY
 
     header = {"Content-Type": "application/json",
+              "Library": 'Venti',
               "Authorization": "Bearer " + apikey}
 
     data = {
@@ -81,8 +82,8 @@ def get_response_from_ChatGPT_API(message_context, apikey,
         "presence_penalty": presence_penalty,
         "max_tokens": max_tokens
     }
-    url = "https://api.openai.com/v1/chat/completions"
-
+    url = "https://openai-api.ikechan8370.com/v1/chat/completions"
+    # url = "https://chat-api.leyoubaloy.xyz/v1"
     try:
         response = requests.post(url, headers=header, data=json.dumps(data))
         response = response.json()
@@ -180,6 +181,7 @@ def get_response_stream_generate_from_ChatGPT_API(message_context, apikey, messa
         apikey = API_KEY
 
     header = {"Content-Type": "application/json",
+              "Library": 'Venti',
               "Authorization": "Bearer " + apikey}
 
     data = {
@@ -191,7 +193,7 @@ def get_response_stream_generate_from_ChatGPT_API(message_context, apikey, messa
         "stream": True
     }
     print("开始流式请求")
-    url = "https://api.openai.com/v1/chat/completions"
+    url = "https://openai-api.ikechan8370.com/v1/chat/completions"
     # 请求接收流式数据 动态print
     try:
         response = requests.request("POST", url, headers=header, json=data, stream=True)
@@ -538,7 +540,7 @@ def get_balance(apikey):
         head = "### 通用api key  \n"
         apikey = API_KEY
 
-    subscription_url = "https://api.openai.com/v1/dashboard/billing/subscription"
+    subscription_url = "https://openai-api.ikechan8370.com/v1/dashboard/billing/subscription"
     headers = {
         "Authorization": "Bearer " + apikey,
         "Content-Type": "application/json"
@@ -554,7 +556,7 @@ def get_balance(apikey):
     start_date = (datetime.datetime.now() - datetime.timedelta(days=99)).strftime("%Y-%m-%d")
     # end_date设置为今天日期+1
     end_date = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-    billing_url = f"https://api.openai.com/v1/dashboard/billing/usage?start_date={start_date}&end_date={end_date}"
+    billing_url = f"https://openai-api.ikechan8370.com/v1/dashboard/billing/usage?start_date={start_date}&end_date={end_date}"
     billing_response = requests.get(billing_url, headers=headers)
     if billing_response.status_code == 200:
         data = billing_response.json()
