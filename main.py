@@ -13,11 +13,12 @@ import threading
 import pickle
 import asyncio
 import yaml
+from env import CONFIG
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
 
-with open("F:\ChatGPT-Web-main\config.yaml", "r", encoding="utf-8") as f:
+with open(CONFIG, "r", encoding="utf-8") as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
     if 'HTTPS_PROXY' in config:
         if os.environ.get('HTTPS_PROXY') is None:  # 优先使用环境变量中的代理，若环境变量中没有代理，则使用配置文件中的代理
