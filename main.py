@@ -3,7 +3,7 @@ import json
 import shutil
 import tempfile
 import urllib.parse
-
+from datetime import datetime
 import requests
 from flask import Flask, render_template, request, session, send_file, make_response
 import os
@@ -14,8 +14,10 @@ import pickle
 import asyncio
 import yaml
 from env import CONFIG
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 app.config['SECRET_KEY'] = os.urandom(24)
 
 with open(CONFIG, "r", encoding="utf-8") as f:
@@ -83,7 +85,7 @@ def get_response_from_ChatGPT_API(message_context, apikey,
         "presence_penalty": presence_penalty,
         "max_tokens": max_tokens
     }
-    url = "https://openai-api.ikechan8370.com/v1/chat/completions"
+    url = "https://api.openai.com/v1/chat/completions"
     # url = "https://chat-api.leyoubaloy.xyz/v1"
     try:
         response = requests.post(url, headers=header, data=json.dumps(data))
@@ -194,7 +196,7 @@ def get_response_stream_generate_from_ChatGPT_API(message_context, apikey, messa
         "stream": True
     }
     print("开始流式请求")
-    url = "https://openai-api.ikechan8370.com/v1/chat/completions"
+    url = "https://api.openai.com/v1/chat/completions"
     # 请求接收流式数据 动态print
     try:
         response = requests.request("POST", url, headers=header, json=data, stream=True)
@@ -363,7 +365,8 @@ def backup_user_dict_file():
     备份用户字典文件
     :return:
     """
-    backup_file_name = USER_DICT_FILE.replace(".pkl", f"_buckup_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}.pkl")
+    backup_file_name = USER_DICT_FILE.replace(".pkl",
+                                              f"_buckup_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}.pkl")
     shutil.copy(USER_DICT_FILE, backup_file_name)
     print(f"备份用户字典文件{USER_DICT_FILE}为{backup_file_name}")
 
@@ -375,7 +378,7 @@ def upload_user_dict_file():
     :return:
     """
     check_session(session)
-    file = request.files.get('file')        # 获取上传的文件
+    file = request.files.get('file')  # 获取上传的文件
     if file:
         if request.headers.get("admin-password") is None:
             success, message = auth(request.headers, session)
@@ -445,10 +448,12 @@ def upload_user_dict_file():
                 else:
                     for chat_id in upload_user_dict.get(user_id)['chats'].keys():
                         if all_user_dict.get(user_id)['chats'].get(chat_id) is None:
-                            all_user_dict.get(user_id)['chats'][chat_id] = upload_user_dict.get(user_id)['chats'][chat_id]
+                            all_user_dict.get(user_id)['chats'][chat_id] = upload_user_dict.get(user_id)['chats'][
+                                chat_id]
                         else:
                             new_chat_id = str(uuid.uuid1())
-                            all_user_dict.get(user_id)['chats'][new_chat_id] = upload_user_dict.get(user_id)['chats'][chat_id]
+                            all_user_dict.get(user_id)['chats'][new_chat_id] = upload_user_dict.get(user_id)['chats'][
+                                chat_id]
             lock.release()
             asyncio.run(save_all_user_dict())
             return '所有用户记录合并完成'
@@ -524,7 +529,7 @@ def new_chat_dict(user_id, name, send_time):
 
 def new_user_dict(user_id, send_time):
     chat_id = str(uuid.uuid1())
-    user_dict = {"chats": {chat_id: new_chat_dict(user_id, "默认对话", send_time)},
+    user_dict = {"chats": {chat_id: new_chat_dict(user_id, "AI对话分析", send_time)},
                  "selected_chat_id": chat_id,
                  "default_chat_id": chat_id}
 
@@ -541,7 +546,7 @@ def get_balance(apikey):
         head = "### 通用api key  \n"
         apikey = API_KEY
 
-    subscription_url = "https://openai-api.ikechan8370.com/v1/dashboard/billing/subscription"
+    subscription_url = "https://api.openai.com/v1/dashboard/billing/subscription"
     headers = {
         "Authorization": "Bearer " + apikey,
         "Content-Type": "application/json"
@@ -557,7 +562,7 @@ def get_balance(apikey):
     start_date = (datetime.datetime.now() - datetime.timedelta(days=99)).strftime("%Y-%m-%d")
     # end_date设置为今天日期+1
     end_date = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-    billing_url = f"https://openai-api.ikechan8370.com/v1/dashboard/billing/usage?start_date={start_date}&end_date={end_date}"
+    billing_url = f"https://api.openai.com/v1/dashboard/billing/usage?start_date={start_date}&end_date={end_date}"
     billing_response = requests.get(billing_url, headers=headers)
     if billing_response.status_code == 200:
         data = billing_response.json()
@@ -580,6 +585,41 @@ def get_balance(apikey):
                   f"#### 已用:\t{total_usage:.4f}  \n" \
                   f"#### 剩余:\t{total - total_usage:.4f}  \n" \
                   f"\n" + recent
+
+
+def get_time_str(time):
+    year = time.year  # 得到年份
+    month = time.month  # 得到月份
+    date = time.day  # 得到日期
+    hour = time.hour  # 得到小时
+    if hour < 10:
+        hour = "0" + str(hour)
+    minute = time.minute  # 得到分钟
+    if minute < 10:
+        minute = "0" + str(minute)
+    return f"{year}年{month}月{date}日 {hour}:{minute}"
+
+
+@app.route('/createUser', methods=['GET', 'POST'])
+def createUser():
+    username = request.args.get("username")
+    url_redirect = {"url_redirect": "/predict", "user_id": None}
+    user_id = username
+    url_redirect["user_id"] = user_id
+    if user_id in all_user_dict:
+        session['user_id'] = user_id
+        return url_redirect
+
+    time = datetime.now()  # 获取当前时间
+    time = get_time_str(time)
+
+    user_dict = new_user_dict(user_id, time)
+    lock.acquire()
+    all_user_dict.put(user_id, user_dict)  # 默认普通对话
+    lock.release()
+    print("创建新的用户id:\t", user_id)
+    session['user_id'] = user_id
+    return url_redirect
 
 
 @app.route('/returnMessage', methods=['GET', 'POST'])
