@@ -53,10 +53,10 @@ STREAM_FLAG = True  # 是否开启流式推送
 USER_DICT_FILE = "all_user_dict_v3.pkl"  # 用户信息存储文件（包含版本）
 lock = threading.Lock()  # 用于线程锁
 
-project_info = "## ChatGPT 网页版    \n" \
-               " Code From  " \
-               "[ChatGPT-Web](https://github.com/LiangYang666/ChatGPT-Web)  \n" \
-               "发送`帮助`可获取帮助  \n"
+project_info = "## 欢迎使用风电智能分析服务    \n" \
+               # " Code From  " \
+               # "[ChatGPT-Web](https://github.com/LiangYang666/ChatGPT-Web)  \n" \
+               # "发送`帮助`可获取帮助  \n"
 
 
 def get_response_from_ChatGPT_API(message_context, apikey,
@@ -636,6 +636,7 @@ def return_message():
         session.clear()
 
     messages = request_data.get("messages")
+    print('message->', messages)
     max_tokens = request_data.get("max_tokens")
     model = request_data.get("model")
     temperature = request_data.get("temperature")
@@ -644,6 +645,7 @@ def return_message():
     save_message = request_data.get("save_message")
 
     send_message = messages[-1].get("content")
+    print('send_message', send_message)
     send_time = messages[-1].get("send_time")
     display_time = bool(messages[-1].get("display_time"))
     url_redirect = {"url_redirect": "/", "user_id": None}
@@ -763,6 +765,7 @@ def return_message():
                     if k not in ['role', 'content']:
                         del m[k]
             if not STREAM_FLAG:
+                print('here1')
                 if save_message:
                     messages_history.append(messages[-1])
                 response = get_response_from_ChatGPT_API(messages, apikey)
@@ -775,6 +778,7 @@ def return_message():
                 asyncio.run(save_all_user_dict())
                 return response
             else:
+                print('here2')
                 if save_message:
                     messages_history.append(messages[-1])
                 asyncio.run(save_all_user_dict())
@@ -784,6 +788,175 @@ def return_message():
                                                                          model=model, temperature=temperature,
                                                                          max_tokens=max_tokens)
                 return app.response_class(generate(), mimetype='application/json')
+
+
+@app.route('/returnMessage1', methods=['GET', 'POST'])
+def return_message1():
+    """
+    获取用户发送的消息，调用get_chat_response()获取回复，返回回复，用于更新聊天框
+    :return:
+    """
+    check_session(session)
+    request_data = request.get_json()
+
+    success, message = auth(request.headers, session)
+    if not success:
+        session.clear()
+
+    messages = request_data.get("messages")
+    print('message->', messages)
+    max_tokens = request_data.get("max_tokens")
+    model = request_data.get("model")
+    temperature = request_data.get("temperature")
+    stream = request_data.get("stream")
+    continuous_chat = request_data.get("continuous_chat")
+    save_message = request_data.get("save_message")
+
+    send_message = messages[-1].get("content")
+    print('send_message', send_message)
+    send_time = messages[-1].get("send_time")
+    display_time = bool(messages[-1].get("display_time"))
+    url_redirect = {"url_redirect": "/", "user_id": None}
+    if send_message == "帮助":
+        return "### 帮助\n" \
+               "1. 输入`new:xxx`创建新的用户id\n " \
+               "2. 输入`id:your_id`切换到已有用户id，新会话时无需加`id:`进入已有用户\n" \
+               "3. 输入`rename_id:xxx`可将当前用户id更改\n" \
+               "4. 输入`查余额`可获得余额信息及最近几天使用量\n" \
+               "5. 相关设置也可以在设置面板中进行设置\n" \
+               "6. 输入`帮助`查看帮助信息"
+    if session.get('user_id') is None:  # 如果当前session未绑定用户
+        print("当前会话为首次请求，用户输入:\t", send_message)
+        if send_message.startswith("new:"):
+            user_id = send_message.split(":")[1]
+            url_redirect["user_id"] = user_id
+            if user_id in all_user_dict:
+                session['user_id'] = user_id
+                return url_redirect
+            user_dict = new_user_dict(user_id, send_time)
+            lock.acquire()
+            all_user_dict.put(user_id, user_dict)  # 默认普通对话
+            lock.release()
+            print("创建新的用户id:\t", user_id)
+            session['user_id'] = user_id
+            url_redirect["user_id"] = user_id
+            return url_redirect
+        else:
+            user_id = send_message
+            user_info = get_user_info(user_id)
+            if user_info is None:
+                return "用户id不存在，请重新输入或创建新的用户id"
+            else:
+                session['user_id'] = user_id
+                print("已有用户id:\t", user_id)
+                # 重定向到index
+                url_redirect["user_id"] = user_id
+                return url_redirect
+    else:  # 当存在用户id时
+        if send_message.startswith("id:"):
+            user_id = send_message.split(":")[1].strip()
+            user_info = get_user_info(user_id)
+            if user_info is None:
+                return "用户id不存在，请重新输入或创建新的用户id"
+            else:
+                session['user_id'] = user_id
+                url_redirect["user_id"] = user_id
+                print("切换到已有用户id:\t", user_id)
+                # 重定向到index
+                return url_redirect
+        elif send_message.startswith("new:"):
+            user_id = send_message.split(":")[1]
+            if user_id in all_user_dict:
+                return "用户id已存在，请重新输入或切换到已有用户id"
+            session['user_id'] = user_id
+            url_redirect["user_id"] = user_id
+            user_dict = new_user_dict(user_id, send_time)
+            lock.acquire()
+            all_user_dict.put(user_id, user_dict)
+            lock.release()
+            print("创建新的用户id:\t", user_id)
+            return url_redirect
+        elif send_message.startswith("delete:"):  # 删除用户
+            user_id = send_message.split(":")[1]
+            if user_id != session.get('user_id'):
+                return "只能删除当前会话的用户id"
+            else:
+                lock.acquire()
+                all_user_dict.delete(user_id)
+                lock.release()
+                session['user_id'] = None
+                print("删除用户id:\t", user_id)
+                # 异步存储all_user_dict
+                asyncio.run(save_all_user_dict())
+                return url_redirect
+        elif send_message.startswith("set_apikey:"):
+            apikey = send_message.split(":")[1]
+            user_info = get_user_info(session.get('user_id'))
+            user_info['apikey'] = apikey
+            # TODO 前端未存储
+            print("设置用户专属apikey:\t", apikey)
+            return "设置用户专属apikey成功"
+        elif send_message.startswith("rename_id:"):
+            new_user_id = send_message.split(":")[1]
+            user_info = get_user_info(session.get('user_id'))
+            if new_user_id in all_user_dict:
+                return "用户id已存在，请重新输入"
+            else:
+                lock.acquire()
+                all_user_dict.delete(session['user_id'])
+                all_user_dict.put(new_user_id, user_info)
+                lock.release()
+                session['user_id'] = new_user_id
+                asyncio.run(save_all_user_dict())
+                print("修改用户id:\t", new_user_id)
+                url_redirect["user_id"] = new_user_id
+                return url_redirect
+        elif send_message == "查余额":
+            user_info = get_user_info(session.get('user_id'))
+            apikey = user_info.get('apikey')
+            return get_balance(apikey)
+        else:  # 处理聊天数据
+            user_id = session.get('user_id')
+            print(f"用户({user_id})发送消息:{send_message}")
+            user_info = get_user_info(user_id)
+            chat_id = user_info['selected_chat_id']
+            messages_history = user_info['chats'][chat_id]['messages_history']
+            chat_with_history = user_info['chats'][chat_id]['chat_with_history']
+            apikey = user_info.get('apikey')
+            if chat_with_history:
+                user_info['chats'][chat_id]['have_chat_context'] += 1
+            if display_time:
+                messages_history.append({'role': 'web-system', "content": send_time})
+            for m in messages:
+                keys = list(m.keys())
+                for k in keys:
+                    if k not in ['role', 'content']:
+                        del m[k]
+            if not STREAM_FLAG:
+                print('here1')
+                if save_message:
+                    messages_history.append(messages[-1])
+                response = get_response_from_ChatGPT_API(messages, apikey)
+                if save_message:
+                    messages_history.append({"role": "assistant", "content": response})
+                asyncio.run(save_all_user_dict())
+
+                print(f"用户({session.get('user_id')})得到的回复消息:{response[:40]}...")
+                # 异步存储all_user_dict
+                asyncio.run(save_all_user_dict())
+                return response
+            else:
+                print('here2')
+                # if save_message:
+                    # messages_history.append(messages[-1])
+                asyncio.run(save_all_user_dict())
+                if not save_message:
+                    messages_history = []
+                generate = get_response_stream_generate_from_ChatGPT_API(messages, apikey, messages_history,
+                                                                         model=model, temperature=temperature,
+                                                                         max_tokens=max_tokens)
+                return app.response_class(generate(), mimetype='application/json')
+
 
 
 async def save_all_user_dict():
